@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { GridTradingBot, gridConfig } from './services/bot';
 
 @Injectable()
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
+  runBot() {
+    const gridTradingBot = new GridTradingBot(gridConfig);
+    gridTradingBot.start();
   }
 }
