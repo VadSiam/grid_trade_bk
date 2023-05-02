@@ -25,12 +25,20 @@ class GridTradingBot {
     }
 
     this.isRunning = true;
-    // this.exchangeApi.start();
-    await this.calculateGrid();
-    await this.placeGridOrders();
-    this.exchangeApi.subscribeOrderStream((order) => {
-      this.onOrderUpdate(order);
-    });
+    try {
+      await this.calculateGrid();
+      console.log(
+        '🚀 ~ file: bot.ts:26 ~ GridTradingBot ~ this.grid',
+        this.grid,
+      );
+      await this.placeGridOrders();
+      console.log('🚀 ~ file: bot.ts:20 ~ this.orders:', this.orders);
+      // this.exchangeApi.subscribeOrderStream((order) => {
+      //   this.onOrderUpdate(order);
+      // });
+    } catch (error) {
+      console.log('Start Error: ', error);
+    }
   }
 
   public async onOrderUpdate(order) {
@@ -39,25 +47,28 @@ class GridTradingBot {
 
   // Calculate grid levels and prices here
   private async calculateGrid() {
-    const { gridLevels, gridSpacing, tradeAmount, tradingPair1 } =
+    const { gridLevels, gridSpacing, tradeBalance, tradingPair1 } =
       this.gridConfig;
-    // const tickerPrice = await this.exchangeApi.getTickerPrice(tradingPair1);
-    // const currentMarketPrice = tickerPrice.last;
     const currentMarketPrice = await this.exchangeApi.getTickerPrice(
       tradingPair1,
     );
 
+    const { last: currentPrice } = currentMarketPrice;
+    const amountPerLevel = tradeBalance / gridLevels / 2;
+
     for (let i = 1; i <= gridLevels; i++) {
-      const currentPrice = currentMarketPrice;
-      const buyPrice = currentPrice * (1 - (i * gridSpacing) / 100);
-      const sellPrice = currentPrice * (1 + (i * gridSpacing) / 100);
-      const amount = tradeAmount;
+      const priceBuy = currentPrice * (1 - (i * gridSpacing) / 100); // thb amount
+      const priceSell = currentPrice * (1 + (i * gridSpacing) / 100); // btc amount
+
+      const amountBuy = amountPerLevel;
+      const amountSell = amountPerLevel / priceSell;
 
       this.grid.push({
-        level: i + 1,
-        buyPrice,
-        sellPrice,
-        amount,
+        level: i,
+        priceBuy,
+        priceSell,
+        amountBuy,
+        amountSell,
       });
     }
   }
@@ -67,17 +78,17 @@ class GridTradingBot {
       // symbol, side, type, amount, price
       const buyOrder = await this.exchangeApi.createOrder({
         symbol: this.gridConfig.tradingPair1,
-        type: 'buy',
-        side: 'limit',
-        amount: gridLevel.amount,
-        price: gridLevel.buyPrice,
+        side: 'buy',
+        type: 'limit',
+        amount: gridLevel.amountBuy,
+        price: gridLevel.priceBuy,
       });
       const sellOrder = await this.exchangeApi.createOrder({
         symbol: this.gridConfig.tradingPair1,
-        type: 'sell',
-        side: 'limit',
-        amount: gridLevel.amount,
-        price: gridLevel.sellPrice,
+        side: 'sell',
+        type: 'limit',
+        amount: gridLevel.amountSell,
+        price: gridLevel.priceSell,
       });
 
       this.orders.push({
@@ -117,14 +128,14 @@ class GridTradingBot {
 
     // Buy BTC with the available THB balance
     if (thbBalance) {
-      const marketPrice = await this.exchangeApi.getTickerPrice(
+      const { last: marketPrice } = await this.exchangeApi.getTickerPrice(
         this.gridConfig.tradingPair1,
       );
       const btcAmount = thbBalance / marketPrice;
       await this.exchangeApi.createOrder({
         symbol: this.gridConfig.tradingPair1,
-        type: 'buy',
-        side: 'market',
+        side: 'buy',
+        type: 'market',
         amount: btcAmount,
         price: 0,
       });
@@ -135,9 +146,9 @@ class GridTradingBot {
 const gridConfig: GridConfig = {
   tradingPair1: 'THB_BTC',
   tradingPair2: 'THB_ETH',
-  gridLevels: 10,
+  gridLevels: 2,
   gridSpacing: 0.5,
-  tradeAmount: 0.01,
+  tradeBalance: 900, // THB
   upperPrice: 40000,
   lowerPrice: 30000,
 };

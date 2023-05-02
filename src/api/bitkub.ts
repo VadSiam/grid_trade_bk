@@ -1,7 +1,11 @@
-import { GridConfig } from './types';
+import { removeTrailingZeros } from 'src/helpers';
+import { CreateOrderData, GridConfig, ITickerPriceResponse } from './types';
 import * as crypto from 'crypto';
+// import fetch from 'node-fetch';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const WebSocket = require('ws');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const fetch = require('node-fetch');
 
 class ExchangeApi {
   private gridConfig: GridConfig;
@@ -18,101 +22,67 @@ class ExchangeApi {
     this.baseURL = 'https://api.bitkub.com';
   }
 
-  async apiRequest(
-    method,
-    endpoint,
-    params = {},
-    data = {},
-    isSigned = false,
-    additionalHeaders = {},
-  ) {
+  async apiRequest(method, endpoint, params = {}, data = {}) {
     const url = new URL(this.baseURL + endpoint);
     const headers = {
+      Accept: 'application/json',
       'Content-Type': 'application/json',
       'X-BTK-APIKEY': this.apiKey,
-      ...additionalHeaders,
     };
-
-    // If the request needs to be signed
-    if (isSigned) {
-      const timestamp = Date.now();
-      const signaturePayload = {
-        ...params,
-        ts: timestamp,
-      };
-
-      // Add the signature to the headers
-      const signature = this.createSignature(signaturePayload);
-      headers['X-BTK-SIGNATURE'] = signature;
-    }
 
     // Add query parameters to the URL
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.append(key, value as string);
     });
 
-    const response = await fetch(url.toString(), {
-      method,
-      headers,
-      body: method === 'POST' ? JSON.stringify(data) : null,
-    });
+    try {
+      const response = await fetch(url.toString(), {
+        method,
+        headers,
+        body: method === 'POST' ? JSON.stringify(data) : null,
+      });
 
-    if (!response.ok) {
-      throw new Error(
-        `API request failed: ${response.status} - ${response.statusText}`,
-      );
+      if (!response.ok) {
+        throw new Error(
+          `API request failed: ${response.status} - ${response.statusText}`,
+        );
+      }
+
+      const jsonResponse: any = await response.json();
+      return jsonResponse;
+    } catch (error) {
+      console.log('apiRequest func error:', error);
     }
-
-    const jsonResponse = await response.json();
-    return jsonResponse;
   }
 
   createSignature(payload) {
-    // Create the signature for signed requests
+    // Convert the payload object to a JSON string
     const payloadString = JSON.stringify(payload);
+
+    // Create the signature for signed requests
     return crypto
       .createHmac('sha256', this.apiSecret)
       .update(payloadString)
       .digest('hex');
   }
 
-  //   {
-  //   stream: 'market.ticker.thb_eth',
-  //   id: 2,
-  //   last: 62957.57,
-  //   lowestAsk: 62928.11,
-  //   lowestAskSize: 0.2446948,
-  //   highestBid: 62861.58,
-  //   highestBidSize: 0.13326121,
-  //   change: -1831.44,
-  //   percentChange: -2.83,
-  //   baseVolume: 670.40862414,
-  //   quoteVolume: 42832555.05,
-  //   isFrozen: 0,
-  //   high24hr: 65720.05,
-  //   low24hr: 62600,
-  //   open: 64789.01,
-  //   close: 62957.57
-  // }
-  public start() {
-    this.subscribeTickerStream(this.gridConfig.tradingPair1, (data: any) => {
-      // console.log('🚀 ~ tradingPair1:', data);
-      this.tickerPrices.set(
-        this.gridConfig.tradingPair1,
-        data,
-        // parseFloat(data.last),
-      );
-    });
+  // public start() {
+  //   this.subscribeTickerStream(this.gridConfig.tradingPair1, (data: any) => {
+  //     this.tickerPrices.set(
+  //       this.gridConfig.tradingPair1,
+  //       data,
+  //       // parseFloat(data.last),
+  //     );
+  //   });
 
-    this.subscribeTickerStream(this.gridConfig.tradingPair2, (data: any) => {
-      // console.log('🚀 ~ tradingPair2:', data);
-      this.tickerPrices.set(
-        this.gridConfig.tradingPair2,
-        data,
-        // parseFloat(data.last),
-      );
-    });
-  }
+  //   this.subscribeTickerStream(this.gridConfig.tradingPair2, (data: any) => {
+  //     this.tickerPrices.set(
+  //       this.gridConfig.tradingPair2,
+  //       data,
+  //       // parseFloat(data.last),
+  //     );
+  //   });
+  // }
 
   private subscribeTickerStream(
     tradingPair: string,
@@ -155,40 +125,37 @@ class ExchangeApi {
         'GET',
         `/api/market/ticker?sym=${tradingPair}`,
       );
-      return response[tradingPair];
+      return response[tradingPair] as ITickerPriceResponse;
     } catch (error) {
       console.error(`Error fetching ticker price for ${tradingPair}:`, error);
       return null;
     }
   }
 
-  async createOrder({ symbol, side, type, amount, price }) {
-    const endpoint = '/api/market/place-bid';
+  async createOrder({ symbol, side, type, amount, price }: CreateOrderData) {
+    // const endpoint =
+    //   side === 'buy'
+    //     ? '/api/market/place-bid/test'
+    //     : '/api/market/place-ask/test';
+    const endpoint =
+      side === 'buy' ? '/api/market/v2/place-bid' : '/api/market/v2/place-ask';
     const timestamp = Date.now();
     const data = {
       sym: symbol,
-      side: side,
-      type: type,
-      amt: amount.toFixed(8),
-      rat: price.toFixed(2),
+      typ: type,
+      amt: removeTrailingZeros(amount.toFixed(8)),
+      rat: removeTrailingZeros(price.toFixed(2)),
       ts: timestamp,
     };
-
     const signature = this.createSignature(data);
-    const headers = {
-      'X-BTK-SIGNATURE': signature,
-      'X-BTK-TIMESTAMP': timestamp,
-    };
+    data['sig'] = signature;
 
-    const response = await this.apiRequest(
-      'POST',
-      endpoint,
-      {},
-      data,
-      true,
-      headers,
-    );
-    return response;
+    try {
+      const response = await this.apiRequest('POST', endpoint, {}, data);
+      return response;
+    } catch (error) {
+      console.log('createOrder func error: ', error);
+    }
   }
 
   public async cancelOrder(symbol, orderId) {
