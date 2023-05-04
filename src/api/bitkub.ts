@@ -4,9 +4,12 @@ import {
   CancelOrderData,
   CancelOrderDataAlternative,
   CreateOrderData,
+  GetInfoOrderData,
+  GetInfoOrderDataAlternative,
   GridConfig,
   ITickerPriceResponse,
   Order,
+  OrderHistory,
 } from './types';
 import * as crypto from 'crypto';
 // import fetch from 'node-fetch';
@@ -212,6 +215,36 @@ class ExchangeApi {
     } catch (error) {
       console.error('Error fetching open orders:', error);
       return [];
+    }
+  }
+
+  public async getOrderInfo({
+    symbol,
+    orderId,
+    side,
+    hash,
+  }: GetInfoOrderDataAlternative | GetInfoOrderData): Promise<OrderHistory> {
+    try {
+      const timestamp = Date.now();
+      const data = {
+        sym: symbol,
+        id: orderId,
+        ts: timestamp,
+        ...(side ? { sd: side } : {}),
+        ...(hash ? { hash } : {}),
+      };
+      const signature = this.createSignature(data);
+      data['sig'] = signature;
+      const response = await this.apiRequest(
+        'POST',
+        '/api/market/order-info',
+        {},
+        data,
+      );
+      return response.result;
+    } catch (error) {
+      console.error('Error fetching order info:', error);
+      throw error;
     }
   }
 

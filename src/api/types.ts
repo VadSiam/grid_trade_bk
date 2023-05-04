@@ -88,6 +88,43 @@ export interface CancelOrderDataAlternative {
   hash: string;
 }
 
+export interface GetInfoOrderData {
+  symbol: string;
+  orderId: string;
+  side: 'buy' | 'sell';
+  hash?: string;
+}
+export interface GetInfoOrderDataAlternative {
+  symbol?: string;
+  orderId?: string;
+  side?: 'buy' | 'sell';
+  hash: string;
+}
+
 export interface Balance {
   [key: string]: number;
+}
+
+export interface OrderHistory {
+  id: number;
+  first: number;
+  parent: number;
+  last: number;
+  amount: number;
+  rate: number;
+  fee: number;
+  credit: number;
+  filled: number;
+  total: number;
+  status: string;
+  partial_filled: boolean;
+  remaining: number;
+  history: Array<{
+    amount: number;
+    credit: number;
+    fee: number;
+    id: number;
+    rate: number;
+    timestamp: number;
+  }>;
 }

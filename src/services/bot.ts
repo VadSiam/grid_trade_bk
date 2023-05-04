@@ -8,7 +8,11 @@ import {
   Order,
   Side,
 } from 'src/api/types';
-import { getCoinsFromPair, stringToNumber } from 'src/helpers';
+import {
+  executeWithRetry,
+  getCoinsFromPair,
+  stringToNumber,
+} from 'src/helpers';
 
 class GridTradingBot {
   private gridConfig: GridConfig;
@@ -37,7 +41,10 @@ class GridTradingBot {
 
     this.isRunning = true;
     try {
-      // 0. Check balance enough for trading
+      // 0. Cancel all orders before starting
+      await this.cancelAllOrders();
+
+      // 1. Check balance enough for trading
       const isBalanceEnough = await this.checkBalance();
       if (!isBalanceEnough) {
         this.stop();
@@ -45,9 +52,6 @@ class GridTradingBot {
           `Balance is not enough for trading. Checking please. Summary it should be more than ${this.gridConfig.tradeBalance} THB`,
         );
       }
-
-      // 1. Cancel all orders before starting
-      await this.cancelAllOrders();
 
       // 2. Calculate grid levels
       await this.calculateGrid();
@@ -275,19 +279,19 @@ class GridTradingBot {
 
   //TODO: nothing
   private async checkOrdersPeriodically(): Promise<void> {
-    const openOrders = await this.exchangeApi.getMyOpenOrders(
-      this.gridConfig.tradingPair1,
+    // sometime glitch at bitkub server happens. need to run 3 times to make sure orders exist
+    const openOrders = await executeWithRetry(
+      () => this.exchangeApi.getMyOpenOrders(this.gridConfig.tradingPair1),
+      1000,
     );
-    // if (openOrders.length !== this.orders.length) {
-    //   this.orders = this.orders.filter((order) => {
-    //     const orderCheck = openOrders.some((oOrder) => oOrder.id === order.id);
-    //     return orderCheck;
-    //   });
-    // }
-    console.log('🚀 ~ file: bot.ts:136 ~ openOrders:', openOrders.length);
-    const openOrderIds = new Set(openOrders.map((order) => order.id));
-    const executedOrders = this.orders.filter(
-      (order) => !openOrderIds.has(order.id),
+    console.log('🚀 ~ file: bot.ts:287 ~ openOrders:', openOrders.length);
+    // const openOrderIds = openOrders.map((order) => order.id);
+    // const executedOrders = this.orders.filter((order) => {
+    //   return !openOrderIds.includes(order.id);
+    // });
+    const openOrderIds = await Promise.all(openOrders.map((order) => order.id));
+    const executedOrders = await Promise.all(
+      this.orders.filter((order) => !openOrderIds.includes(order.id)),
     );
 
     if (executedOrders.length) {
@@ -295,7 +299,14 @@ class GridTradingBot {
       // creating new orders
       await Promise.all(
         executedOrders.map(async (order) => {
-          const { side, receive } = order;
+          const { hash } = order;
+          const infoFromOrder = await this.exchangeApi.getOrderInfo({ hash });
+          const { status } = infoFromOrder;
+          console.log('🚀 ~ file: bot.ts:306 ~ infoFromOrder:', infoFromOrder);
+          if (!(status === 'filled')) {
+            return null;
+          }
+          const { side, receive, rate } = order;
           if (side === 'SELL') {
             const amountCoinTHB = stringToNumber(receive);
             const grid = await this.calculateSingleGrid(
@@ -315,7 +326,9 @@ class GridTradingBot {
               buyCreateError,
             );
           } else {
-            const amountCoinTHB = stringToNumber(receive);
+            const receiveInNumber = stringToNumber(receive);
+            const rateInNumber = stringToNumber(rate);
+            const amountCoinTHB = receiveInNumber * rateInNumber;
             const grid = await this.calculateSingleGrid(
               Side.SELL,
               amountCoinTHB,
@@ -407,7 +420,7 @@ const gridConfig: GridConfig = {
   tradingPair1: 'THB_BTC',
   tradingPair2: 'THB_ETH',
   gridLevels: 5,
-  gridSpacing: 0.5,
+  gridSpacing: 0.3, // 0.5%
   tradeBalance: 10000, // THB
   upperPrice: 40000, // not in use
   lowerPrice: 30000, // not in use

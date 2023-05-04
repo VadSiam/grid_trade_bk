@@ -40,9 +40,38 @@ const stringToNumber = (str: string): number => {
   return number;
 };
 
+/**
+ * Execute a function with retry logic 3 times
+ * @param func Function to execute
+ * @param timeout Timeout between retries in milliseconds
+ * @returns The result of the function
+ * @throws If the function throws an error after all retries
+ */
+async function executeWithRetry<T>(
+  func: () => Promise<T[]>,
+  timeout: number,
+): Promise<T[]> {
+  let result: T[] = [];
+  let retries = 0;
+  while (retries < 3) {
+    result = await func();
+    if (result.length > 0) {
+      break;
+    }
+    retries++;
+    await sleep(timeout);
+  }
+  return result;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export {
   removeTrailingZeros,
   filterNonZeroValues,
   getCoinsFromPair,
   stringToNumber,
+  executeWithRetry,
 };
