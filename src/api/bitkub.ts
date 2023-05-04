@@ -1,5 +1,13 @@
-import { removeTrailingZeros } from 'src/helpers';
-import { CreateOrderData, GridConfig, ITickerPriceResponse } from './types';
+import { filterNonZeroValues, removeTrailingZeros } from 'src/helpers';
+import {
+  Balance,
+  CancelOrderData,
+  CancelOrderDataAlternative,
+  CreateOrderData,
+  GridConfig,
+  ITickerPriceResponse,
+  Order,
+} from './types';
 import * as crypto from 'crypto';
 // import fetch from 'node-fetch';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -84,7 +92,7 @@ class ExchangeApi {
   //   });
   // }
 
-  private subscribeTickerStream(
+  public subscribeTickerStream(
     tradingPair: string,
     callback: (data: any) => void,
   ) {
@@ -158,70 +166,116 @@ class ExchangeApi {
     }
   }
 
-  public async cancelOrder(symbol, orderId) {
+  public async cancelOrder({
+    symbol,
+    orderId,
+    side,
+    hash,
+  }: CancelOrderData | CancelOrderDataAlternative) {
     try {
-      await this.apiRequest('POST', '/api/market/cancel-order', {
-        order_id: orderId,
-      });
+      const timestamp = Date.now();
+      const data = {
+        // sym: string The symbol
+        // id: int Order id you wish to cancel
+        // sd: string Order side: buy or sell
+        // hash: string Cancel an order with order hash(optional).You don't need to specify sym, id, and sd when you specify order hash.
+        sym: symbol,
+        id: orderId,
+        sd: side,
+        hash,
+        ts: timestamp,
+      };
+      const signature = this.createSignature(data);
+      data['sig'] = signature;
+      await this.apiRequest('POST', '/api/market/v2/cancel-order', {}, data);
     } catch (error) {
       console.error(`Error canceling order ${orderId}:`, error);
     }
   }
 
-  public async getOpenOrders(tradingPair) {
+  public async getMyOpenOrders(symbol: string): Promise<Order[]> {
     try {
+      const timestamp = Date.now();
+      const data = {
+        sym: symbol,
+        ts: timestamp,
+      };
+      const signature = this.createSignature(data);
+      data['sig'] = signature;
       const response = await this.apiRequest(
         'POST',
         '/api/market/my-open-orders',
-        { sym: tradingPair },
+        {},
+        data,
       );
       return response.result;
     } catch (error) {
-      console.error(`Error fetching open orders for ${tradingPair}:`, error);
-      return null;
+      console.error('Error fetching open orders:', error);
+      return [];
     }
   }
 
-  public async getBalances() {
+  public async getAvailableBalances(): Promise<Balance> {
     try {
-      const response = await this.apiRequest('POST', '/api/market/balances');
-      return response.result;
+      const timestamp = Date.now();
+      const data = {
+        ts: timestamp,
+      };
+      const signature = this.createSignature(data);
+      data['sig'] = signature;
+      const { result } = await this.apiRequest(
+        'POST',
+        '/api/market/wallet',
+        {},
+        data,
+      );
+      const filteredResult = filterNonZeroValues(result);
+      return filteredResult;
     } catch (error) {
-      console.error('Error fetching balances:', error);
+      console.error('Error fetching open orders:', error);
       return null;
     }
   }
 
-  public subscribeOrderStream(onOrderUpdate) {
-    const wsUrl = `wss://api.bitkub.com/websocket-api/order`;
+  // public subscribeOrderStream(
+  //   orders: OrderPair[],
+  //   symbol: string,
+  //   onOrderUpdate,
+  // ) {
+  //   const wsUrl = `wss://api.bitkub.com/websocket-api/orderbook/${symbol}`;
 
-    const ws = new WebSocket(wsUrl);
+  //   const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      console.log(`WebSocket connected to ${wsUrl}`);
-      const payload = {
-        type: 'subscribe',
-        channel: 'order',
-        api_key: this.apiKey,
-      };
-      ws.send(JSON.stringify(payload));
-    };
+  //   const orderIds = new Set(
+  //     orders.flatMap((pair) => [pair.buyOrder.id, pair.sellOrder.id]),
+  //   );
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'order') {
-        onOrderUpdate(data);
-      }
-    };
+  //   ws.onopen = () => {
+  //     console.log(`WebSocket connected to ${wsUrl}`);
+  //   };
 
-    ws.onerror = (error) => {
-      console.error(`WebSocket error on ${wsUrl}:`, error);
-    };
+  //   ws.onmessage = (event) => {
+  //     const data = JSON.parse(event.data);
+  //     console.log('🚀 ~ file: bitkub.ts:213 ~ event:', event, data);
+  //     if (data.event === 'tradeschanged') {
+  //       const [trades, bids, asks] = data.data;
+  //       const orders = [...bids, ...asks].filter((order) =>
+  //         orderIds.has(order[0]),
+  //       );
+  //       if (orders.length > 0) {
+  //         onOrderUpdate(orders);
+  //       }
+  //     }
+  //   };
 
-    ws.onclose = () => {
-      console.log(`WebSocket disconnected from ${wsUrl}`);
-    };
-  }
+  //   ws.onerror = (error) => {
+  //     console.error(`WebSocket error on ${wsUrl}:`, error);
+  //   };
+
+  //   ws.onclose = () => {
+  //     console.log(`WebSocket disconnected from ${wsUrl}`);
+  //   };
+  // }
 }
 
 export { ExchangeApi };

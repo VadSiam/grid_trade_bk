@@ -3,6 +3,7 @@
     "APIKEY",
     "bitkub",
     "cwebsocket",
-    "nestjs"
+    "nestjs",
+    "tradeschanged"
   ]
 }

@@ -6,6 +6,8 @@ export interface GridConfig {
   tradeBalance: number;
   upperPrice: number;
   lowerPrice: number;
+  priceThreshold: number;
+  bitkubTradingFee: number;
 }
 
 export interface Grid {
@@ -32,10 +34,60 @@ export interface ITickerPriceResponse {
   prevOpen: number;
 }
 
+export type ISideCreate = 'buy' | 'sell';
+export type ITypeCreate = 'limit' | 'market';
+
 export interface CreateOrderData {
   symbol: string;
-  side: 'buy' | 'sell';
-  type: 'limit' | 'market';
+  side: ISideCreate;
+  type: ITypeCreate;
   amount: number;
   price: number;
+}
+
+export type ISide = 'BUY' | 'SELL';
+export const Side: Record<ISide, ISide> = {
+  BUY: 'BUY',
+  SELL: 'SELL',
+};
+export interface Order {
+  id: string;
+  hash: string;
+  side: ISide;
+  type: 'limit' | 'market';
+  rate: string;
+  fee: string;
+  credit: string;
+  amount: string;
+  receive: string;
+  parent_id: string;
+  super_id: string;
+  client_id: null | string;
+  ts: number;
+  // id: string;
+  // hash: string;
+  // typ: string;
+  // amt: number;
+  // rat: number;
+  // fee: number;
+  // cre: number;
+  // rec: number;
+  // ts: string;
+}
+
+export interface CancelOrderData {
+  symbol: string;
+  orderId: string;
+  side: 'buy' | 'sell';
+  hash?: string;
+}
+export interface CancelOrderDataAlternative {
+  symbol?: string;
+  orderId?: string;
+  side?: 'buy' | 'sell';
+  hash: string;
+}
+
+export interface Balance {
+  [key: string]: number;
 }
