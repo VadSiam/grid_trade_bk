@@ -6,5 +6,6 @@ export class AppService {
   runBot() {
     const gridTradingBot = new GridTradingBot(gridConfig);
     gridTradingBot.start();
+    // gridTradingBot.continueWatching();
   }
 }

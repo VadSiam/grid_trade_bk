@@ -34,6 +34,25 @@ class GridTradingBot {
     console.log('TradingBot stopped.');
   }
 
+  async continueWatching() {
+    if (this.isRunning) {
+      throw new Error('Grid trading bot is already running');
+    }
+
+    this.isRunning = true;
+
+    try {
+      // 0. Get all running orders and assign it to this.orders
+      const checkMyOrders = await this.exchangeApi.getMyOpenOrders(
+        this.gridConfig.tradingPair1,
+      );
+      this.orders = checkMyOrders;
+
+      // 1. Call checkOrdersPeriodically to start periodically checking orders
+      await this.checkOrdersPeriodically();
+    } catch (error) {}
+  }
+
   async start() {
     if (this.isRunning) {
       throw new Error('Grid trading bot is already running');
