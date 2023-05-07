@@ -439,7 +439,7 @@ const gridConfig: GridConfig = {
   tradingPair1: 'THB_BTC',
   tradingPair2: 'THB_ETH',
   gridLevels: 5,
-  gridSpacing: 0.3, // 0.5%
+  gridSpacing: 0.45, // 0.5%
   tradeBalance: 10000, // THB
   upperPrice: 40000, // not in use
   lowerPrice: 30000, // not in use
