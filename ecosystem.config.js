@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 module.exports = {
   apps: [
     {
-      name: 'nestjs-app',
+      name: 'grid',
       script: 'dist/main.js',
       instances: 'max',
       autorestart: true,
